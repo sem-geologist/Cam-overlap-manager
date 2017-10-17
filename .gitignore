@@ -1,3 +1,4 @@
- Quanti/
- build/
+ .directory
+ ./Quanti/
+ ./build/
  */__cache__/*
