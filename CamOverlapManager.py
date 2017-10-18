@@ -1,4 +1,4 @@
-version= '0.3.0'
+version= '0.6.0'
 about_text = """
 copyright 2016 Petras Jokubauskas <klavishas@gmail.com>
 
@@ -191,6 +191,17 @@ class CamecaBase(object):
 
 class CamecaQtiSetup(CamecaBase):
     def __init__(self, filename):
+        self.parse_thing(filename)
+        
+    def refresh(self):
+        if os.path.isfile(self.filename):
+            if mod_date(self.filename) != self.file_modification_date:
+                logging.warning(html_colorify(self.file_basename + ".qtiSet got changed. refreshing...", 'yellow'))
+                self.parse_thing(self.filename)
+        else:
+            logging.warning(html_colorify(self.file_basename + ".qtiSet got removed. The ovl file is orphaned.", 'yellow'))
+            
+    def parse_thing(self, filename):
         self.filename = filename
         with open(filename, 'br') as fn:
             #file bytes 
@@ -202,9 +213,7 @@ class CamecaQtiSetup(CamecaBase):
         if self.cameca_bin_file_type != 4:
             raise IOError(' '.join(['The file header shows it is not qtiSet',
                                     'file, but', self.file_type]))
-        self.parse_thing(fbio)
-
-    def parse_thing(self, fbio):
+        #parse data:
         fbio.seek(12, 1)  # unknown shit
         self.n_options = struct.unpack('<i', fbio.read(4))[0]
         self.fingerprints = []
@@ -500,6 +509,8 @@ class TreeOverlapModel(QtCore.QAbstractItemModel):
         node = index.internalPointer()
 
         if role == QtCore.Qt.DisplayRole:
+            if index.column() == 1 and type(node.node) == CamecaOverlap:
+                return node.data(index.column()).date()
             return node.data(index.column())
         if role == QtCore.Qt.ToolTipRole and index.column() < 2:
             return node.data(index.column())
@@ -593,9 +604,9 @@ class OverlapFileModel(QtCore.QAbstractTableModel, CamecaBase):
           (orientation == QtCore.Qt.Horizontal):
             return self.horizontal_header_tooltips[section]
     
-    def set_cameca_overlap(self, overlap):
+    def set_cameca_overlap(self, overlaps):
         self.beginResetModel()
-        self.cam_overlaps = overlap
+        self.cam_overlaps = overlaps
         self.endResetModel()
         #at loading the new overlap file reset modified flag:
         self.modified = False
@@ -681,6 +692,13 @@ class OverlapFileModel(QtCore.QAbstractTableModel, CamecaBase):
         self.endResetModel()
         self.modified = True
         return True
+    
+    def checkOverlapCover(self, fingerprints):
+        not_covered = []
+        for i in range(len(self.cam_overlaps.overlaps)):
+            if self.cam_overlaps.overlaps[i].fingerprint not in fingerprints:
+                not_covered.append(i)
+        return not_covered
 
 
 class LeafFilterProxyModel(QtCore.QSortFilterProxyModel):
@@ -779,7 +797,7 @@ class AvailableOverlapTreeView(QtWidgets.QTreeView):
         self.setDragDropMode(QtWidgets.QAbstractItemView.DragOnly)
         self.setSelectionMode(QtWidgets.QAbstractItemView.ExtendedSelection)
         self.setSortingEnabled(True)
-        self.header().setDefaultSectionSize(60)
+        self.header().setDefaultSectionSize(50)
         self.setObjectName("sourceTV")
     
     def startDrag(self, event):
@@ -805,6 +823,11 @@ class AvailableOverlapTreeView(QtWidgets.QTreeView):
 
         drag.setPixmap(pixmap)
         drag.exec()
+    
+    def setColumnWidths(self):
+        widths = [120,100,55,60,35,35,40,45,70,70,45,45]
+        for i in range(len(widths)):
+            self.setColumnWidth(i, widths[i])
         
 
 class NewOverlapFileView(QtWidgets.QTreeView):
@@ -900,8 +923,9 @@ class MainWindow(Ui_MainWindow, QtWidgets.QMainWindow):
         self.actionSave_setup.triggered.connect(self.save_to_file)
         self.actionExit.triggered.connect(self.close)
         self._setup_logging()
+        self.sourceTV.setColumnWidths()
         self.file_watcher.addPath(qtiSet_path)
-        self.file_watcher.directoryChanged.connect(self.create_available_overlaps_model)
+        self.file_watcher.directoryChanged.connect(self.refresh_data)
         
     def _setup_logging(self):
         self.logTextBox = QPlainTextEditLogger(self.text_interface)
@@ -909,7 +933,13 @@ class MainWindow(Ui_MainWindow, QtWidgets.QMainWindow):
         #global:
         logging.getLogger().addHandler(self.logTextBox)
         logging.getLogger().setLevel(logging.WARNING)
-        
+    
+    def refresh_data(self):
+        #reset qtiSet if available:
+        if self.el_line_protect:
+            self.qti_setup.refresh()
+            self.check_coverage()
+        self.create_available_overlaps_model(qtiSet_path)
     
     def changeNameFilter(self):
         self.filterModel.setFilenameFilter(self.lineEdit.text())
@@ -977,7 +1007,13 @@ class MainWindow(Ui_MainWindow, QtWidgets.QMainWindow):
             if self.overlap_file_model.modified:
                 return self.save_modified_overlap_dlg()
             else:
-                return True         
+                return True
+    
+    def check_coverage(self):
+        not_covered = self.overlap_file_model.checkOverlapCover(self.qti_setup.fingerprints)
+        if len(not_covered) > 0:   
+            if self.remove_excesive_overlap_dlg():
+                self.remove_excesive_overlaps(not_covered)
     
     def save_modified_overlap_dlg(self):
         dlg = QtWidgets.QMessageBox()
@@ -999,6 +1035,26 @@ class MainWindow(Ui_MainWindow, QtWidgets.QMainWindow):
         if ret == QtWidgets.QMessageBox.Cancel:
             #don't do anything, return False to stop the parent function:
             return False
+
+    def remove_excesive_overlap_dlg(self):
+        dlg = QtWidgets.QMessageBox()
+        dlg.setText("The excesive overlap entry(-ies) was/were detected."
+            "It can cause PeakSight to malfunction or crash.")
+        dlg.setInformativeText("Do you want to remove it/them?")
+        dlg.setStandardButtons(QtWidgets.QMessageBox.Yes |\
+                               QtWidgets.QMessageBox.No)
+        dlg.setDefaultButton(QtWidgets.QMessageBox.Yes)
+        dlg.setIcon(QtWidgets.QMessageBox.Question)
+        ret = dlg.exec()
+        if ret == QtWidgets.QMessageBox.Yes:
+            return True
+        return False
+    
+    def remove_excesive_overlaps(self, not_covered):
+        if self.overlap_file_model.deleteRows(not_covered):
+            logging.info(str(len(not_covered)) + ' got removed')
+        else:
+            logging.warning('removing of selected entries failed')
     
     def save_to_file(self):
         if self.overlap_file_model.cam_overlaps is not None:
@@ -1058,6 +1114,7 @@ class MainWindow(Ui_MainWindow, QtWidgets.QMainWindow):
             self.overlap_file_model.set_cameca_overlap(CamecaOverlap(ovl_filename))
             if self.el_line_protect:
                 self.qti_setup = CamecaQtiSetup(qti_setup_file)
+                self.check_coverage()
             self.create_available_overlaps_model(qtiSet_path)
             return True
         else:
