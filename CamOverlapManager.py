@@ -303,8 +303,8 @@ class CamecaOverlap(CamecaBase):
             fbio.write(0x08 * b'\x00')
         return fbio
     
-    def save_to_file(self):
-        self.fbio = self._initiate_with_header()
+    def save_to_file(self,version=3):
+        self.fbio = self._initiate_with_header(version=version)
         self.fbio.write(struct.pack('<2i', 0, self.n_overlaps))
         for i in self.overlaps:
             self.fbio.write(i.raw_str)
@@ -1059,7 +1059,11 @@ class MainWindow(Ui_MainWindow, QtWidgets.QMainWindow):
     def save_to_file(self):
         if self.overlap_file_model.cam_overlaps is not None:
             self.file_watcher.blockSignals(True)
-            self.overlap_file_model.cam_overlaps.save_to_file()
+            if self.el_line_protect:
+                v = self.qti_setup.file_version
+            else:
+                v = 3
+            self.overlap_file_model.cam_overlaps.save_to_file(version=v)
             self.overlap_file_model.modified = False
             self.file_watcher.blockSignals(False)
     
@@ -1159,7 +1163,7 @@ class MainWindow(Ui_MainWindow, QtWidgets.QMainWindow):
 if __name__ == '__main__':
     app = QtWidgets.QApplication(sys.argv)
     window = MainWindow()
-    window.setWindowTitle(' '.join(['Cam-overlap-manager',version]))
+    window.setWindowTitle(' '.join(['Cam-overlap-manager', version]))
     window.setWindowIcon(QtGui.QIcon(os.path.join(program_path, 'icons', 'overlap.png')))
     window.show()
     app.exec_()
