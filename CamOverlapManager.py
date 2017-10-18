@@ -1,4 +1,4 @@
-version= '0.0.1'
+version= '0.2.0'
 about_text = """
 copyright 2016 Petras Jokubauskas <klavishas@gmail.com>
 
@@ -97,8 +97,8 @@ class CamecaBase(object):
     """base class with cameca data type translating methods
     and cameca file header reader method useful
     for any other derived Reader/Writer class"""
-	
-	#instead of bellow dicts lists could be used, however,
+
+    #instead of bellow dicts lists could be used, however,
     #python dict is much faster to lookup than list
     #and it is going to be looked up many many times
     value_map = {
@@ -194,20 +194,21 @@ class CamecaQtiSetup(CamecaBase):
         self.filename = filename
         with open(filename, 'br') as fn:
             #file bytes 
-            self.fbio = BytesIO()
-            self.fbio.write(fn.read())
+            fbio = BytesIO()
+            fbio.write(fn.read())
         self.file_basename = os.path.basename(filename).rsplit('.', 1)[0]
         self.file_modification_date = mod_date(filename)
-        self._read_the_header(self.fbio)
+        self._read_the_header(fbio)
         if self.cameca_bin_file_type != 4:
             raise IOError(' '.join(['The file header shows it is not qtiSet',
                                     'file, but', self.file_type]))
+        self.parse_thing(fbio)
 
-    def parse_thing(self):
+    def parse_thing(self, fbio):
         fbio.seek(12, 1)  # unknown shit
         self.n_options = struct.unpack('<i', fbio.read(4))[0]
+        self.fingerprints = []
         self.options = {}
-        self.elements = {}
         for i in range(self.n_options):
             fbio.seek(32, 1)  # skip another junk
             field_names = ['heat', 'HV', 'unkn1',
@@ -216,13 +217,19 @@ class CamecaQtiSetup(CamecaBase):
                            'C2', 'unkn2', 'current',
                            'BFocus', 'unkn3', 'unkn4', 'BFocus2',
                            'size', 'asti_amp', 'asti_deg']
-            field_values = struct.unpack('<20i', self.fbio.read(80))
+            field_values = struct.unpack('<20i', fbio.read(80))
             self.options[i] = dict(zip(field_names, field_values))
-            self.seek(424, 1)  # skip not so relevant information and junk
+            fbio.seek(424, 1)  # skip not so relevant information and junk
             elements = struct.unpack('<i', fbio.read(4))[0]
             for j in range(elements):
-                #TODO
-                j
+                #field_names2 = ['atom', 'line', 'spect no', 'xtal','2d','K']
+                #field_values2 = struct.unpack('<3i4s2f', fbio.read(24))
+                #fingerprint = fbio.read(16) # get binary fingerprint
+                self.fingerprints.append(fbio.read(16))
+                #thingy = (dict(zip(field_names2, field_values2)))
+                fbio.seek(8, 1)
+                str_len = struct.unpack('<i', fbio.read(4))[0]
+                fbio.seek(424 + str_len, 1)  # skip irrelevant shit
 
 
 class CamecaOverlap(CamecaBase):
@@ -323,6 +330,7 @@ class OverlapItem(object):
                 self.dwelltime, self.unknown2 = struct.unpack('<fi',
                                                               fbio[i+12:i+20])
         self.std_name = std_name.decode()
+        self.fingerprint = struct.pack('<3i4s',self.atom, self.line, self.spect_nr, self.spect_name)
         
         
     def _first_initiate(self):
@@ -355,7 +363,11 @@ class TreeItem(CamecaBase):
     def no_child_condition(self):
         return position < 0 or position > len(self._children) or\
           type(self.node) != CamecaOverlap
-            
+    
+    def setParent(self, parent):
+        self._parent = parent
+        parent.addChild(self)
+    
     def addChild(self, child):
         self._children.append(child)
 
@@ -738,6 +750,14 @@ class CascadingFilterModel(LeafFilterProxyModel):
         regex = '\\s|'.join(element_list) + '\\s'
         self.sort_elem_model.setFilterRegExp(regex)
         self.sort_interf_model.setFilterRegExp(regex)
+    
+    def setMeasuredElementFilter(self, element_list):
+        regex = '\\s|'.join(element_list) + '\\s'
+        self.sort_elem_model.setFilterRegExp(regex)
+
+    def setOverlapingElementFilter(self, element_list):
+        regex = '\\s|'.join(element_list) + '\\s'
+        self.sort_interf_model.setFilterRegExp(regex)
         
     def get_original_node(self, index):
         level0 = self.mapToSource(index)
@@ -853,6 +873,7 @@ class MainWindow(Ui_MainWindow, QtWidgets.QMainWindow):
         self.sourceTV.setModel(self.filterModel)
         #connect text line edit interface with filtering model:
         self.lineEdit.textChanged.connect(self.changeNameFilter)
+        self.el_line_protect = False
         #create overlap model and set it to be source model of filter model:
         self.create_available_overlaps_model(qtiSet_path)
         #adjust column width to content:
@@ -893,7 +914,10 @@ class MainWindow(Ui_MainWindow, QtWidgets.QMainWindow):
         self.sourceTV.expandAll()
         
     def changeElementFilter(self):
-        self.filterModel.setElementFilter(self.element_selection)
+        if self.el_line_protect:
+            self.filterModel.setOverlapingElementFilter(self.element_selection)
+        else:
+            self.filterModel.setElementFilter(self.element_selection)
         self.sourceTV.expandAll()
         
     def append_element(self, element):
@@ -918,9 +942,14 @@ class MainWindow(Ui_MainWindow, QtWidgets.QMainWindow):
         ovl_list = glob(os.path.join(qtiDat_path, 'Overlap','*.ovl'))
         for i in ovl_list:
             ovl = CamecaOverlap(i)
-            item2 = TreeItem(ovl, item0)
+            item2 = TreeItem(ovl, None)
             for j in ovl.overlaps:
-                TreeItem(j, item2)
+                if not self.el_line_protect:
+                    TreeItem(j, item2)
+                elif j.fingerprint in self.qti_setup.fingerprints:
+                    TreeItem(j, item2)
+            if item2.childCount() > 0:
+                item2.setParent(item0)
         
         self.available_ovl_model = TreeOverlapModel(item0)
         self.filterModel.set_original_model(self.available_ovl_model)
@@ -1004,26 +1033,37 @@ class MainWindow(Ui_MainWindow, QtWidgets.QMainWindow):
                 ovl_filename = filename
                 self.ovl_filename_label.setText(
                                     os.path.join('Overlap', basename + '.ovl'))
+                qti_setup_file = os.path.join('../', basename + '.qtiSet')
+                if os.path.isfile(qti_setup_file):
+                    self.el_line_protect = True
+                else:
+                    self.el_line_protect = False
             elif (selected_ext == 'qtiSet') and (dirbasename == 'Quanti'):
+                qti_setup_file = filename
                 ovl_filename = os.path.join(dirname,
                                             'Overlap',
                                             basename + '.ovl')
                 self.ovl_filename_label.setText(
                                     os.path.join('Overlap', basename + '.ovl'))
+                self.el_line_protect = True
             else:
                 logging.warning(html_colorify("Either Cameca changed the dir hierarchy,",'red'))
                 logging.warning(html_colorify("or either you are trying to do something not conventional...", 'red'))
                 logging.warning(html_colorify("opening/creating file in selected not-cannonical directory", 'yellow'))
                 ovl_filename = filename + '.ovl'
                 self.ovl_filename_label.setText(ovl_filename)
+                self.el_line_protect = False
             self.overlap_file_model.set_cameca_overlap(CamecaOverlap(ovl_filename))
+            if self.el_line_protect:
+                self.qti_setup = CamecaQtiSetup(qti_setup_file)
+            self.create_available_overlaps_model(qtiSet_path)
             return True
         else:
             return False
             
     def model_not_initialized_dlg(self):
         dlg = QtWidgets.QMessageBox()
-        dlg.setText("The output overlap file is not initiate")
+        dlg.setText("The output overlap file is not initiated")
         dlg.setInformativeText("""before the appendment of selection to overlap model, the overlap file have to be opened or created in the next dialog""")
         dlg.setStandardButtons(QtWidgets.QMessageBox.Ok |\
                                QtWidgets.QMessageBox.Cancel)
