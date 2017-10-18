@@ -1,4 +1,4 @@
-version= '0.6.0'
+version= '0.8.0'
 about_text = """
 copyright 2016 Petras Jokubauskas <klavishas@gmail.com>
 
