@@ -1,4 +1,4 @@
-version= '0.2.0'
+version= '0.3.0'
 about_text = """
 copyright 2016 Petras Jokubauskas <klavishas@gmail.com>
 
@@ -229,7 +229,9 @@ class CamecaQtiSetup(CamecaBase):
                 #thingy = (dict(zip(field_names2, field_values2)))
                 fbio.seek(8, 1)
                 str_len = struct.unpack('<i', fbio.read(4))[0]
-                fbio.seek(424 + str_len, 1)  # skip irrelevant shit
+                fbio.seek(420 + str_len, 1)  # skip irrelevant shit
+                if self.file_version == 4:
+                    fbio.seek(4, 1)
 
 
 class CamecaOverlap(CamecaBase):
