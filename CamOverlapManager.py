@@ -926,6 +926,7 @@ class MainWindow(Ui_MainWindow, QtWidgets.QMainWindow):
         self.sourceTV.setColumnWidths()
         self.file_watcher.addPath(qtiSet_path)
         self.file_watcher.directoryChanged.connect(self.refresh_data)
+        self.file_watcher.fileChanged.connect(self.refresh_data)
         
     def _setup_logging(self):
         self.logTextBox = QPlainTextEditLogger(self.text_interface)
@@ -1119,6 +1120,8 @@ class MainWindow(Ui_MainWindow, QtWidgets.QMainWindow):
             if self.el_line_protect:
                 self.qti_setup = CamecaQtiSetup(qti_setup_file)
                 self.check_coverage()
+                self.file_watcher.removePaths(self.file_watcher.files())
+                self.file_watcher.addPath(qti_setup_file)
             self.create_available_overlaps_model(qtiSet_path)
             return True
         else:
