@@ -22,7 +22,7 @@ try:
         data_path = winreg.QueryValueEx(thingy, "DataPath")[0]
     qtiSet_path = os.path.join(data_path, 'Analysis Setups', 'Quanti')
 except:
-    print('Cameca PeakSight sotware were not dected on the system')
+    logging.warning('Cameca PeakSight sotware were not dected on the system')
 
 #for development and debugging on linux/bsd:
 if os.name == 'posix':

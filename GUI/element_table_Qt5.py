@@ -87,9 +87,9 @@ geo_groups = {'LITHOPHILE': ['Na', 'K', 'Rb', 'Cs', 'Sc', 'Si', 'Al', 'Ti', 'Mg'
                       'Gd', 'Os', 'Fe', 'Pb', 'Tm', 'Cd', 'N', 'Tc',
                       'Cs', 'Pr', 'Th', 'Rb', 'Fr', 'Rh']}
 
-element_regex = r"C[laroudse]?|Os?|N[eaibdps]?|S[icernbm]?|" +\
-        r"H[eofga]?|A[lrsgutcm]|B[erai]?|Dy|E[ur]|F[er]?|G[aed]|" +\
-        r"I[nr]?|Kr?|L[iau]|M[gno]|R[buhena]|T[icebmalh]|" +\
+element_regex = r"C[laroudse]?|Os?|N[eaibdps]?|S[icernbm]?|"\
+        r"H[eofga]?|A[lrsgutcm]|B[erai]?|Dy|E[ur]|F[er]?|G[aed]|"\
+        r"I[nr]?|Kr?|L[iau]|M[gno]|R[buhena]|T[icebmalh]|"\
         r"U|V|W|Xe|Yb?|Z[nr]|P[drmtboau]?"
 
 geo_regex = '(?:%s)' % '|'.join(geo_groups.keys())
@@ -280,7 +280,7 @@ Use '-' (minus) sign to switch all elements after it:
         line.setFrameShape(Qt.QFrame.HLine)
         line.setFrameShadow(Qt.QFrame.Sunken)
         self.setCellWidget(6, 3, line)
-        #dissable inert gasses and H, He and Li:
+        #dissable inert gasses, H and Li:
         for i in ['H', 'He', 'Ne', 'Ar', 'Xe', 'Kr', 'Rn', 'Li']:
             self.cellWidget(pt_indexes[i][0],
                             pt_indexes[i][1]).setEnabled(False)
