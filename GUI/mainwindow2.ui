@@ -27,9 +27,6 @@
        <number>10</number>
       </property>
       <widget class="QFrame" name="frame">
-       <property name="frameShape">
-        <enum>QFrame::WinPanel</enum>
-       </property>
        <property name="frameShadow">
         <enum>QFrame::Raised</enum>
        </property>
@@ -56,9 +53,6 @@
          <widget class="QDateEdit" name="minDateEdit">
           <property name="whatsThis">
            <string>date filter with filters out overlap items with older than selection date</string>
-          </property>
-          <property name="displayFormat">
-           <string notr="true">dd-MM-yyyy</string>
           </property>
           <property name="calendarPopup">
            <bool>true</bool>
@@ -102,6 +96,9 @@
          <widget class="QToolButton" name="pet_button">
           <property name="statusTip">
            <string>show/hide element table (ctrl+T), overlap tree can be filtered by with element selection</string>
+          </property>
+          <property name="styleSheet">
+           <string notr="true"/>
           </property>
           <property name="text">
            <string>...</string>
@@ -240,7 +237,7 @@
       </widget>
       <widget class="QFrame" name="frame2">
        <property name="frameShape">
-        <enum>QFrame::WinPanel</enum>
+        <enum>QFrame::NoFrame</enum>
        </property>
        <property name="frameShadow">
         <enum>QFrame::Raised</enum>

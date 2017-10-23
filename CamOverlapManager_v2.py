@@ -5,18 +5,18 @@ from io import BytesIO
 from PyQt5 import QtWidgets, QtCore, QtGui
 import logging
 from glob import glob
-import pickle
 from operator import itemgetter
 
 from datetime import datetime, timedelta
 import os
 import sys
+import time
 
 # GUIelements:
 from GUI.mainwindow2 import Ui_MainWindow
 from GUI import element_table_Qt5 as et
 
-version = '0.8.0'
+version = '0.9.0'
 
 program_path = os.path.dirname(__file__)
 if os.name == 'nt':
@@ -50,6 +50,14 @@ def mod_date(filename):
     """Return datetime of file's last modification"""
     t = os.path.getmtime(filename)
     return datetime.fromtimestamp(t)
+
+
+# define warning messages once:
+the_root_of_all_evil = 'MS Windows is OS designed by loosers '\
+                       'for loosers - it just succesfully wasted '\
+                       'again another 100 ms of your time!;'
+ms_stinks = 'MS Windows sucks... not releasing lock of file for more'\
+            'than 5000 millseconds. Giving up of refreshing qtiSet file.'
 
 
 def html_colorify(string, color):
@@ -172,13 +180,29 @@ class CamecaQtiSetup(CamecaBase):
     def __init__(self, filename):
         self.parse_thing(filename)
 
+    def brute_force_refresh(self):
+        time.sleep(0.1)
+        self.try_time += 0.1
+        logging.warning(html_colorify(the_root_of_all_evil, 'yellow'))
+        if (self.try_time > 5):
+            logging.warning(html_colorify(ms_stinks, 'red'))
+        try:
+            self.parse_thing(self.filename)
+        except PermissionError:
+            self.brute_force_refresh()
+
     def refresh(self):
         if os.path.isfile(self.filename):
             if mod_date(self.filename) != self.file_modification_date:
                 warnung = ".".join([self.file_basename,
-                                    "qtiSet got changed. refreshing..."])
+                                    "qtiSet got changed",
+                                    " trying to refresh..."])
                 logging.warning(html_colorify(warnung, 'yellow'))
-                self.parse_thing(self.filename)
+                self.try_time = 0
+                try:
+                    self.parse_thing(self.filename)
+                except PermissionError:
+                    self.brute_force_refresh()
         else:
             warnung = ".".join([self.file_basename,
                                 "qtiSet got removed",
@@ -382,18 +406,9 @@ class OverlapItem(object):
 class OverlapFileModel(QtCore.QAbstractTableModel, CamecaBase):
     """Model of Overlap file to be used with TableView.
     Contains methods for appending, removing and saving the data"""
-    HORIZONTAL_HEADERS = ["oldest use",
-                          "n.labels",
-                          "elem.l.",
-                          "ovl.e.l.",
-                          "ord.",
-                          "off.",
-                          "HV",
-                          "beam",
-                          "pk-bg",
-                          "std.",
-                          "sp.",
-                          "XTAL",
+    HORIZONTAL_HEADERS = ["oldest use", "n.labels", "elem.l.", "ovl.e.l.",
+                          "ord.", "off.", "HV", "beam",
+                          "pk-bg", "std.", "sp.", "XTAL",
                           "time [s]"]
     horizontal_header_tooltips = ["oldest modification of overlap file",
                                   "number of labels which use the overlap",
@@ -489,9 +504,17 @@ class OverlapFileModel(QtCore.QAbstractTableModel, CamecaBase):
             for j in rows:
                 if i.raw_str == j.raw_str:
                     logging.warning(html_colorify(
-                        ' '.join(['identical', j.__repr__(),
+                        ' '.join(['identical',
+                                  j.__repr__(),
                                   'already presented. Skipping....']),
                         'yellow'))
+                    rows.remove(j)
+                elif (i.fingerprint == j.fingerprint) and (i.i_atom ==
+                                                           j.i_atom):
+                    warnung = ' '.join(["You have to remove the present",
+                                        j.__repr__(),
+                                        "overlap before appending this one"])
+                    logging.warning(html_colorify(warnung, "red"))
                     rows.remove(j)
         if rows == []:
             return False
@@ -618,6 +641,7 @@ class MainWindow(Ui_MainWindow, QtWidgets.QMainWindow):
         # setup interface for element selection:
         self.element_selection = []
         self.elem_table = et.ElementTableGUI()
+        self.elem_table.setWindowOpacity(0.95)
         self.elem_table.enableElement.connect(self.append_element)
         self.elem_table.disableElement.connect(self.remove_element)
         self.elem_table.allElementsOff.connect(self.reset_element)
@@ -901,12 +925,18 @@ if __name__ == '__main__':
     dark_palette.setColor(QPalette.ButtonText, Qt.white)
     dark_palette.setColor(QPalette.BrightText, Qt.red)
     dark_palette.setColor(QPalette.Link, QColor(42, 130, 218))
-    dark_palette.setColor(QPalette.Highlight, QColor(42, 130, 218))
-    dark_palette.setColor(QPalette.HighlightedText, Qt.black)
+    #dark_palette.setColor(QPalette.Highlight, QColor(42, 130, 218))
+    dark_palette.setColor(QPalette.Highlight, QColor(0, 100, 125))
+    dark_palette.setColor(QPalette.HighlightedText, Qt.white)
 
     app.setPalette(dark_palette)
-
-    app.setStyleSheet("QToolTip { color: #ffffff; background-color: #2a82da; border: 1px solid white; }")
     
+    new_font = app.font()
+    new_font.setPointSize(10)
+    app.setFont(new_font)
+
+    app.setStyleSheet("QToolTip { color: #ffffff; background-color: #1a42ba;"
+                      "border: 1px solid white; }")
+
     window.show()
     app.exec_()
