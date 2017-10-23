@@ -503,21 +503,6 @@ class OverlapFileModel(QtCore.QAbstractTableModel, CamecaBase):
         self.modified = True
         return True
 
-    # def flags(self, index):
-    #    if index.isValid():
-    #        node = self.cam_overlaps.overlaps[index.row()]
-    #        return QtCore.Qt.ItemIsEnabled | QtCore.Qt.ItemIsSelectable |\
-    #            QtCore.Qt.ItemIsDragEnabled | QtCore.Qt.ItemIsDropEnabled
-
-    def supportedDropActions(self):
-        return QtCore.Qt.CopyAction
-
-    def mimeTypes(self):
-        return ["application/x-overlap_list"]
-
-    def dropMimeData(self, mimedata, action, row, column, parentIndex):
-        return True
-
     def deleteRows(self, rows=[]):
         if rows == []:
             return False
@@ -619,7 +604,6 @@ class MainWindow(Ui_MainWindow, QtWidgets.QMainWindow):
         super().__init__()
         self.setupUi(self)
         self.file_watcher = QtCore.QFileSystemWatcher()
-        # modify treeview for all overlaps:
         # create and asign filter model to the tree view made before:
         self.filterModel = CascadingFilterModel()
         self.overlap_file_model = OverlapFileModel()
@@ -631,8 +615,6 @@ class MainWindow(Ui_MainWindow, QtWidgets.QMainWindow):
         self.el_line_protect = False
         # create overlap model and set it to be source model of filter model:
         self.create_available_overlaps_model(qtiSet_path)
-        # adjust column width to content:
-
         # setup interface for element selection:
         self.element_selection = []
         self.elem_table = et.ElementTableGUI()
@@ -653,12 +635,12 @@ class MainWindow(Ui_MainWindow, QtWidgets.QMainWindow):
         self.actionSave_setup.triggered.connect(self.save_to_file)
         self.actionExit.triggered.connect(self.close)
         self._setup_logging()
-        widths = [100, 35, 60, 65, 35, 45, 40, 45, 75, 75, 40, 45, 60]
+        widths = [100, 35, 60, 65, 35, 45, 40, 55, 75, 75, 40, 45, 60]
         for i in range(len(widths)):
             self.sourceTV.setColumnWidth(i, widths[i])
-            self.overlap_file_view.setColumnWidth(i, widths[i])
-        self.sourceTV.setDragEnabled(True)
-        self.sourceTV.setDragDropMode(QtWidgets.QAbstractItemView.DragOnly)
+            self.overlap_file_view.setColumnWidth(i, widths[i]+5)
+        ofv_header = self.overlap_file_view.horizontalHeader()
+        ofv_header.setSectionsMovable(True)
         self.overlap_file_view.hideColumn(0)
         self.overlap_file_view.hideColumn(1)
         self.file_watcher.addPath(qtiSet_path)
@@ -679,9 +661,6 @@ class MainWindow(Ui_MainWindow, QtWidgets.QMainWindow):
             self.qti_setup.refresh()
             self.check_coverage()
         self.create_available_overlaps_model(qtiSet_path)
-
-    def changeNameFilter(self):
-        self.filterModel.setFilenameFilter(self.lineEdit.text())
 
     def changeElementFilter(self):
         if self.el_line_protect:
@@ -733,6 +712,7 @@ class MainWindow(Ui_MainWindow, QtWidgets.QMainWindow):
             return True
         else:
             if self.overlap_file_model.modified:
+                self.check_coverage()
                 return self.save_modified_overlap_dlg()
             else:
                 return True
@@ -905,5 +885,28 @@ if __name__ == '__main__':
     window.setWindowTitle(' '.join(['Cam-overlap-manager', version]))
     window.setWindowIcon(
         QtGui.QIcon(os.path.join(program_path, 'icons', 'overlap.png')))
+    app.setStyle("Fusion")
+    from PyQt5.QtGui import QPalette, QColor
+    from PyQt5.QtCore import Qt
+    dark_palette = QPalette()
+
+    dark_palette.setColor(QPalette.Window, QColor(53, 53, 53))
+    dark_palette.setColor(QPalette.WindowText, Qt.white)
+    dark_palette.setColor(QPalette.Base, QColor(25, 25, 25))
+    dark_palette.setColor(QPalette.AlternateBase, QColor(53, 53, 53))
+    dark_palette.setColor(QPalette.ToolTipBase, Qt.white)
+    dark_palette.setColor(QPalette.ToolTipText, Qt.white)
+    dark_palette.setColor(QPalette.Text, Qt.white)
+    dark_palette.setColor(QPalette.Button, QColor(53, 53, 53))
+    dark_palette.setColor(QPalette.ButtonText, Qt.white)
+    dark_palette.setColor(QPalette.BrightText, Qt.red)
+    dark_palette.setColor(QPalette.Link, QColor(42, 130, 218))
+    dark_palette.setColor(QPalette.Highlight, QColor(42, 130, 218))
+    dark_palette.setColor(QPalette.HighlightedText, Qt.black)
+
+    app.setPalette(dark_palette)
+
+    app.setStyleSheet("QToolTip { color: #ffffff; background-color: #2a82da; border: 1px solid white; }")
+    
     window.show()
     app.exec_()
